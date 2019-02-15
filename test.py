@@ -23,7 +23,6 @@ async def print_events(device, config):
                     if(keyevt.keystate < 2):
                         # print(device.path, keyevt)
                         url = str(config["ip"])
-                        print(url)
                         path = "/"
                         
                         params = {
