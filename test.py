@@ -4,12 +4,16 @@ import asyncio
 import sys
 import requests
 import json
+import time
 
 print("Avoid pressing keys during startup. Wait until OK for all devices.")
 print("Pressing keys during startup causes those keys to get locked up until the device is unplugged.")
 print("Press [Esc] to exit")
 
-async def print_events(device, config):
+taps = {}
+
+async def print_events(device):
+    global taps
     print("OK: ", device.path)
     while True:
         async for event in device.async_read_loop():
@@ -20,14 +24,43 @@ async def print_events(device, config):
                     ext()
                     sys.exit(0)
                 else:
+                    if(keyevt.keystate == 1):
+                        if(keyevt.scancode in taps):
+                            if(taps[keyevt.scancode] != None):
+                                taps[keyevt.scancode] = {
+                                    "taps": taps[keyevt.scancode]["taps"] + 1,
+                                    "time": int(time.time()),
+                                    "device": device.path
+                                    }
+                            else:
+                                taps[keyevt.scancode] = {
+                                    "taps": 1,
+                                    "time": int(time.time()),
+                                    "device": device.path
+                                    }
+                                
+                        else:
+                            taps[keyevt.scancode] = {
+                                "taps": 1,
+                                "time": int(time.time()),
+                                "device": device.path
+                                }
+        
+                            
                     if(keyevt.keystate < 2):
                         # print(device.path, keyevt)
-                        url = str(config["ip"])
+                        url = str(config_data["ip"])
                         path = "/"
-                        
+
+                        tapcount = 1
+                        if(keyevt.scancode in taps):
+                            if(taps[keyevt.scancode] != None):
+                                tapcount = taps[keyevt.scancode]["taps"]
                         params = {
                             "device": device.path,
                             "state": keyevt.keystate,
+                            "taps": tapcount,
+                            "final": 0,
                             "scancode": format(keyevt.scancode, "x")
                             }
                         # print(params)
@@ -44,6 +77,30 @@ def ext():
             device.ungrab()
         except:
             pass
+    task.cancel()
+
+async def tap_loop():
+    global taps
+    while True:
+        for key, value in taps.items():
+            if(value == None):
+                continue
+            if(int(time.time()) - taps[key]["time"] >= 1):
+                params = {
+                    "device": device.path,
+                    "state": 3,
+                    "taps": taps[key]["taps"],
+                    "final": 1,
+                    "scancode": format(key, "x")
+                    }
+                url = str(config_data["ip"])
+                path = "/"
+                try:
+                    requests.post(url + path, params=params)
+                except:
+                    pass
+                taps[key] = None
+        await asyncio.sleep(1)
 
 devices = [evdev.InputDevice("/dev/Macros1")]
 
@@ -58,7 +115,8 @@ for device in devices:
             device.grab()
         except:
             pass
-        asyncio.ensure_future(print_events(device, config_data))
+        asyncio.ensure_future(print_events(device))
 
 loop = asyncio.get_event_loop()
+task = loop.create_task(tap_loop())
 loop.run_forever()
