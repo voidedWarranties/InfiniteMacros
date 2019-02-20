@@ -12,8 +12,13 @@ print("Press [Esc] to exit")
 
 taps = {}
 
+hotstring = ""
+hotstring_time = 0
+
 async def print_events(device):
     global taps
+    global hotstring
+    global hotstring_time
     print("OK: ", device.path)
     while True:
         async for event in device.async_read_loop():
@@ -25,6 +30,9 @@ async def print_events(device):
                     sys.exit(0)
                 else:
                     if(keyevt.keystate == 1):
+                        hotstringkey = keyevt.keycode[4:] + "/"
+                        hotstring = hotstring + hotstringkey
+                        hotstring_time = int(time.time())
                         if(keyevt.scancode in taps):
                             if(taps[keyevt.scancode] != None):
                                 taps[keyevt.scancode] = {
@@ -70,7 +78,7 @@ async def print_events(device):
                             pass
 
 def ext():
-    devices = [evdev.InputDevice("/dev/Macros1")]
+    devices = [evdev.InputDevice("/dev/Macros1"), evdev.InputDevice("/dev/Macros2")]
     for device in devices:
         try:
             print("Ungrabbing Device: ", device)
@@ -81,6 +89,8 @@ def ext():
 
 async def tap_loop():
     global taps
+    global hotstring
+    global hotstring_time
     while True:
         for key, value in taps.items():
             if(value == None):
@@ -100,9 +110,25 @@ async def tap_loop():
                 except:
                     pass
                 taps[key] = None
+
+        if(int(time.time()) - hotstring_time >= 1):
+            if(hotstring != "" and hotstring.endswith("ENTER/")):
+                params = {
+                    "device": device.path,
+                    "state": 4,
+                    "scancode": "",
+                    "hotstring": hotstring
+                    }
+                url = str(config_data["ip"])
+                path = "/"
+                try:
+                    requests.post(url + path, params=params)
+                except:
+                    pass
+            hotstring = ""
         await asyncio.sleep(1)
 
-devices = [evdev.InputDevice("/dev/Macros1")]
+devices = [evdev.InputDevice("/dev/Macros1"), evdev.InputDevice("/dev/Macros2")]
 
 config = open("config.json")
 config_str = config.read()
