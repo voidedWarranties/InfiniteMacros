@@ -69,7 +69,8 @@ async def print_events(device):
                             "state": keyevt.keystate,
                             "taps": tapcount,
                             "final": 0,
-                            "scancode": format(keyevt.scancode, "x")
+                            "scancode": format(keyevt.scancode, "x"),
+                            "key": keyevt.keycode
                             }
                         # print(params)
                         try:
